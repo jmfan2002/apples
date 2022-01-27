@@ -26,3 +26,7 @@ buildNumber.properties
 .factorypath
 .project
 .vscode/
+
+# screenshot data
+/binarized.png
+/screenshot.png
