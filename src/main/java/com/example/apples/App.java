@@ -16,10 +16,14 @@ public class App {
 
     static final int WIDTH = 17;
     static final int HEIGHT = 10;
+    static final int TOP_CORNER_X = 638;
+    static final int TOP_CORNER_Y = 233;
+    static final int APPLE_SIZE = 73;
     // kinda arbitrary, 765 is max cuz 255 * 3 = 765
     static final int WHITE_THRESHOLD = 650;
 
     static int[][] apples;
+    static int size = 2;
 
     public static void main(String[] args) throws Exception {
         getApples();
@@ -33,8 +37,8 @@ public class App {
         apples = new int[HEIGHT][WIDTH];
         try {
             Robot bot = new Robot();
-            // pause for 2s, switch tabs to apple game in this time
-            bot.delay(2000);
+            // pause for 0.5s, switch tabs to apple game in this time
+            bot.delay(500);
             // press reset and play buttons
             int mask = InputEvent.BUTTON1_DOWN_MASK;
             bot.mouseMove(650, 1050);
@@ -44,10 +48,10 @@ public class App {
             bot.mouseMove(1000, 650);
             bot.mousePress(mask);
             bot.mouseRelease(mask);
-            // take screenshot
             bot.delay(500);
+            // take screenshot
             // rectangle is set for the bounds of the apple box
-            BufferedImage img = bot.createScreenCapture(new Rectangle(630, 228, 1270, 772));
+            BufferedImage img = bot.createScreenCapture(new Rectangle(TOP_CORNER_X, TOP_CORNER_Y, 1270, 772));
             ImageIO.write(img, "png", new File("./screenshot.png"));
             // binarize
             for (int x = 0; x < img.getWidth(); x++) {
@@ -56,7 +60,8 @@ public class App {
                     final int red = (clr & 0x00ff0000) >> 16;
                     final int green = (clr & 0x0000ff00) >> 8;
                     final int blue = clr & 0x000000ff;
-                    // above white threshold and not green to white (cuz the apple numbers are red-ish)
+                    // above white threshold and not green to white (cuz the apple numbers are
+                    // red-ish)
                     if (red + green + blue > WHITE_THRESHOLD && green <= red && green <= blue) {
                         img.setRGB(x, y, new Color(255, 255, 255).getRGB());
                     } else {
@@ -70,7 +75,7 @@ public class App {
             final ITesseract instance = new Tesseract();
             instance.setVariable("tessedit_char_whitelist", "0123456789");
             final String result = instance.doOCR(img);
-            System.out.println(result);
+
             // convert to 2d array
             int row = 0;
             int col = 0;
@@ -90,14 +95,22 @@ public class App {
         }
     }
 
-    static void performClick(int x1, int y1, int x2, int y2) {
+    static void performClick(int row1, int col1, int row2, int col2) {
         try {
+            // bot click
             Robot bot = new Robot();
             int mask = InputEvent.BUTTON1_DOWN_MASK;
-            bot.mouseMove(x1, y1);
+            bot.mouseMove(TOP_CORNER_X + col1 * APPLE_SIZE, TOP_CORNER_Y + row1 * APPLE_SIZE);
             bot.mousePress(mask);
-            bot.mouseMove(x2, y2);
+            // bot.delay(100);
+            bot.mouseMove(TOP_CORNER_X + (col2 + 1) * APPLE_SIZE, TOP_CORNER_Y + (row2 + 1) * APPLE_SIZE);
             bot.mouseRelease(mask);
+            // clear from data
+            for (int i = 0; i <= row2 - row1; i++) {
+                for (int j = 0; j <= col2 - col1; j++) {
+                    apples[row1 + i][col1 + j] = 0;
+                }
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -105,39 +118,40 @@ public class App {
 
     // returns the number of apples cleared
     static int calculateMove() {
-        for (int i = 0; i < apples.length; i++) {
-            for (int j = i + 1; j < apples[i].length; j++) {
-                int sum = apples[i][j];
-                // empty space
-                if (sum == 0) {
-                    continue;
-                }
-                // go down the line
-                int k = 1;
-                while (i + k < apples.length && sum < 10) {
-                    sum += apples[i + k][j];
-                }
-                if (sum == 10) {
-                    performClick(i, j, i + k, j);
-                    for (int l = 0; l < k; ++l) {
-                        apples[i + l][j] = 0;
+        while (size < 11) {
+            for (int row = 0; row < apples.length; row++) {
+                for (int col = 0; col < apples[row].length; col++) {
+                    int sum = apples[row][col];
+                    // empty space
+                    if (sum == 0) {
+                        continue;
                     }
-                    return k + 1;
-                }
-                // go across the row
-                sum = apples[i][j];
-                k = 1;
-                while (j + k < apples.length && sum < 10) {
-                    sum += apples[i][j + k];
-                }
-                if (sum == 10) {
-                    performClick(i, j, i, j + k);
-                    for (int l = 0; l < k; ++l) {
-                        apples[i + l][j] = 0;
+                    // go top-down
+                    int k = 1;
+                    while (row + k < apples.length && sum < 10 && k < size) {
+                        sum += apples[row + k][col];
+                        ++k;
                     }
-                    return k + 1;
+                    if (sum == 10) {
+                        --k;
+                        performClick(row, col, row + k, col);
+                        return k + 1;
+                    }
+                    // go across the row
+                    sum = apples[row][col];
+                    k = 1;
+                    while (col + k < apples[row].length && sum < 10 && k < size) {
+                        sum += apples[row][col + k];
+                        k++;
+                    }
+                    if (sum == 10) {
+                        --k;
+                        performClick(row, col, row, col + k);
+                        return k + 1;
+                    }
                 }
             }
+            size++;
         }
         return 0;
     }
